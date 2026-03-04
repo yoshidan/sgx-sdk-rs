@@ -1,72 +1,72 @@
-use libc::timespec;
-use libc::{self, c_int, c_void};
-use std::io::Error;
+use libc::{self, c_int, c_void, timespec};
 use std::slice;
-use std::sync::atomic::{AtomicI32, Ordering};
-use std::sync::Mutex;
-use std::sync::OnceLock;
+use std::sync::{Condvar, Mutex, OnceLock};
+use std::time::Duration;
 
 static GLOBAL_TCS_CACHE: OnceLock<SgxTcsInfoCache> = OnceLock::new();
 
-pub const FUTEX_WAIT: usize = 0;
-pub const FUTEX_WAKE: usize = 1;
-
 pub struct SeEvent {
-    event: AtomicI32,
+    mutex: Mutex<i32>,
+    cond: Condvar,
 }
 
 impl Default for SeEvent {
     fn default() -> Self {
         Self {
-            event: AtomicI32::new(0),
+            mutex: Mutex::new(0),
+            cond: Condvar::new(),
         }
     }
 }
+
 impl SeEvent {
     pub fn new() -> SeEvent {
         SeEvent::default()
     }
 
     pub fn wait_timeout(&self, timeout: &timespec) -> i32 {
-        if self.event.fetch_add(-1, Ordering::SeqCst) == 0 {
-            let ret = unsafe {
-                libc::syscall(
-                    libc::SYS_futex,
-                    self,
-                    FUTEX_WAIT,
-                    -1,
-                    timeout as *const timespec,
-                    0,
-                    0,
-                )
-            };
-            if ret < 0 {
-                let err = Error::last_os_error().raw_os_error().unwrap_or(0);
-                if err == libc::ETIMEDOUT {
-                    let _ = self
-                        .event
-                        .compare_exchange(-1, 0, Ordering::SeqCst, Ordering::SeqCst);
-                    return -1;
-                }
-            }
+        let Some(timeout) = timespec_to_duration(timeout) else {
+            return libc::EINVAL;
+        };
+
+        let mut guard = lock_ignore_poison(&self.mutex);
+
+        *guard -= 1;
+
+        let result;
+        (guard, result) = self
+            .cond
+            .wait_timeout_while(guard, timeout, |g| *g < 0)
+            .unwrap_or_else(|e| e.into_inner());
+        if result.timed_out() && *guard < 0 {
+            *guard = 0;
+            return libc::ETIMEDOUT;
         }
+
         0
     }
 
     pub fn wait(&self) -> i32 {
-        if self.event.fetch_add(-1, Ordering::SeqCst) == 0 {
-            let ret = unsafe { libc::syscall(libc::SYS_futex, self, FUTEX_WAIT, -1, 0, 0, 0) };
-            if ret < 0 {
-                let _err = Error::last_os_error().raw_os_error().unwrap_or(0);
-            }
+        let mut guard = lock_ignore_poison(&self.mutex);
+
+        *guard -= 1;
+
+        while *guard < 0 {
+            guard = self.cond.wait(guard).unwrap_or_else(|e| e.into_inner());
         }
+
         0
     }
 
     pub fn wake(&self) -> i32 {
-        if self.event.fetch_add(1, Ordering::SeqCst) != 0 {
-            unsafe { libc::syscall(libc::SYS_futex, self, FUTEX_WAKE, 1, 0, 0, 0) };
+        let mut guard = lock_ignore_poison(&self.mutex);
+
+        *guard += 1;
+
+        if *guard == 0 {
+            self.cond.notify_one();
         }
+
         0
     }
 }
@@ -124,7 +124,7 @@ pub extern "C" fn u_thread_set_event_ocall(error: *mut c_int, tcs: *const c_void
     if result != 0 {
         if !error.is_null() {
             unsafe {
-                *error = Error::last_os_error().raw_os_error().unwrap_or(0);
+                *error = result;
             }
         }
         -1
@@ -161,7 +161,7 @@ pub extern "C" fn u_thread_wait_event_ocall(
     if result != 0 {
         if !error.is_null() {
             unsafe {
-                *error = Error::last_os_error().raw_os_error().unwrap_or(0);
+                *error = result;
             }
         }
         -1
@@ -196,9 +196,7 @@ pub extern "C" fn u_thread_set_multiple_events_ocall(
         result = get_tcs_event(*tcs as usize).wake();
         if result != 0 {
             if !error.is_null() {
-                unsafe {
-                    *error = Error::last_os_error().raw_os_error().unwrap_or(0);
-                }
+                unsafe { *error = result }
             }
             return -1;
         }
@@ -225,4 +223,23 @@ pub extern "C" fn u_thread_setwait_events_ocall(
     } else {
         u_thread_wait_event_ocall(error, self_tcs, timeout)
     }
+}
+
+fn timespec_to_duration(t: &timespec) -> Option<Duration> {
+    if (t.tv_nsec < 0) || (t.tv_nsec > 999_999_999) {
+        return None;
+    }
+    let Ok(secs) = t.tv_sec.try_into() else {
+        return None;
+    };
+    let Ok(nsecs) = t.tv_nsec.try_into() else {
+        return None;
+    };
+    Duration::from_secs(secs).checked_add(Duration::from_nanos(nsecs))
+}
+
+// Acquire a mutex while ignoring its poisoned state. This is to maintain
+// historical behavior.
+fn lock_ignore_poison(m: &Mutex<i32>) -> std::sync::MutexGuard<'_, i32> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
 }
