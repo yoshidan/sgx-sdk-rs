@@ -820,7 +820,8 @@ extern "C" {
 }
 
 #[cfg(all(feature = "epid", not(target_env = "sgx")))]
-#[link(name = "sgx_epid", kind = "dylib")]
+#[cfg_attr(not(feature = "simulation"), link(name = "sgx_epid", kind = "dylib"))]
+#[cfg_attr(feature = "simulation", link(name = "sgx_epid_sim", kind = "dylib"))]
 extern "C" {
     //
     // sgx_uae_epid.h
@@ -870,7 +871,8 @@ extern "C" {
 }
 
 #[cfg(all(feature = "launch", not(target_env = "sgx")))]
-#[link(name = "sgx_launch", kind = "dylib")]
+#[cfg_attr(not(feature = "simulation"), link(name = "sgx_launch", kind = "dylib"))]
+#[cfg_attr(feature = "simulation", link(name = "sgx_launch_sim", kind = "dylib"))]
 extern "C" {
     //
     // sgx_uae_launch.h
@@ -896,7 +898,14 @@ extern "C" {
 }
 
 #[cfg(all(feature = "quote_ex", not(target_env = "sgx")))]
-#[link(name = "sgx_quote_ex", kind = "dylib")]
+#[cfg_attr(
+    not(feature = "simulation"),
+    link(name = "sgx_quote_ex", kind = "dylib")
+)]
+#[cfg_attr(
+    feature = "simulation",
+    link(name = "sgx_quote_ex_sim", kind = "dylib")
+)]
 extern "C" {
     //
     // sgx_uae_quote_ex.h
@@ -938,7 +947,14 @@ extern "C" {
 }
 
 #[cfg(all(feature = "uae_service", not(target_env = "sgx")))]
-#[link(name = "sgx_uae_service", kind = "dylib")]
+#[cfg_attr(
+    not(feature = "simulation"),
+    link(name = "sgx_uae_service", kind = "dylib")
+)]
+#[cfg_attr(
+    feature = "simulation",
+    link(name = "sgx_uae_service_sim", kind = "dylib")
+)]
 extern "C" {
     //
     // sgx_uae_service.h
