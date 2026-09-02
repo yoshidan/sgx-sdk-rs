@@ -37,13 +37,25 @@ const MIN_ALIGN: usize = 8;
 #[cfg(target_arch = "x86_64")]
 const MIN_ALIGN: usize = 16;
 
+/// Stable-API equivalent of `Layout::dangling`.
+///
+/// That method is unstable and has been renamed across nightly versions
+/// (`dangling` -> `dangling_ptr`), which breaks this crate whenever the
+/// toolchain moves. Spelling it out keeps it toolchain-independent; the body
+/// matches the standard library implementation.
+#[inline]
+fn dangling(layout: Layout) -> NonNull<u8> {
+    // SAFETY: `Layout::align` is always a non-zero power of two.
+    unsafe { NonNull::new_unchecked(ptr::without_provenance_mut(layout.align())) }
+}
+
 pub struct System;
 
 impl System {
     #[inline]
     fn alloc_impl(&self, layout: Layout, zeroed: bool) -> Result<NonNull<[u8]>, AllocError> {
         match layout.size() {
-            0 => Ok(NonNull::slice_from_raw_parts(layout.dangling(), 0)),
+            0 => Ok(NonNull::slice_from_raw_parts(dangling(layout), 0)),
             // SAFETY: `layout` is non-zero in size,
             size => unsafe {
                 let raw_ptr = if zeroed {
@@ -166,7 +178,7 @@ unsafe impl Allocator for System {
             // SAFETY: conditions must be upheld by the caller
             0 => {
                 Allocator::deallocate(&self, ptr, old_layout);
-                Ok(NonNull::slice_from_raw_parts(new_layout.dangling(), 0))
+                Ok(NonNull::slice_from_raw_parts(dangling(new_layout), 0))
             }
 
             // SAFETY: `new_size` is non-zero. Other conditions must be upheld by the caller
