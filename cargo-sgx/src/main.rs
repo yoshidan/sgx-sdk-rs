@@ -189,11 +189,13 @@ fn run_sgx_build(args: SgxBuildArgs) -> Result<()> {
     let profile = if args.release { "release" } else { "debug" };
 
     let mut cargo_build = Command::new("cargo");
-    cargo_build
-        .current_dir(&enclave_dir)
-        .arg("build")
-        .arg("--target")
-        .arg(&target_json);
+    cargo_build.current_dir(&enclave_dir).arg("build");
+    // Has to come after the subcommand; before it the flag is accepted but has
+    // no effect on how the target spec is loaded.
+    if cargo_needs_json_target_spec() {
+        cargo_build.arg("-Zjson-target-spec");
+    }
+    cargo_build.arg("--target").arg(&target_json);
 
     if args.release {
         cargo_build.arg("--release");
@@ -240,6 +242,24 @@ fn run_sgx_build(args: SgxBuildArgs) -> Result<()> {
     println!("Successfully built: {}", output_path.display());
 
     Ok(())
+}
+
+/// Whether this cargo requires `-Zjson-target-spec` to accept a `.json` target.
+///
+/// The flag was introduced after 1.93 and building with a JSON target spec
+/// fails without it on newer toolchains, while older ones reject the flag as
+/// unknown. Ask cargo which unstable flags it knows about instead of parsing
+/// version numbers. `cargo -Z <flag> --version` cannot be used as a probe: it
+/// short-circuits before flag validation and succeeds either way.
+fn cargo_needs_json_target_spec() -> bool {
+    Command::new("cargo")
+        .args(["-Z", "help"])
+        .output()
+        .map(|out| {
+            String::from_utf8_lossy(&out.stdout).contains("json-target-spec")
+                || String::from_utf8_lossy(&out.stderr).contains("json-target-spec")
+        })
+        .unwrap_or(false)
 }
 
 fn get_sgx_target_json(enclave_dir: &Path) -> Result<PathBuf> {
