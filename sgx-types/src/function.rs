@@ -16,7 +16,8 @@
 // under the License..
 
 use crate::metadata::{layout_t, TCS_TEMPLATE_SIZE};
-use crate::types::*;
+// `crate::types` is already re-exported from the crate root, so `crate::*`
+// covers it.
 use crate::*;
 
 // Constants from sgx-trts
