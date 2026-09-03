@@ -353,5 +353,7 @@ pub extern "C" fn test_main_entrance() -> size_t {
 
     println!("\ntest result: ok. {} passed; {} failed", passed, failed);
 
-    passed
+    // Return the number of failures so the caller can fail the process. Both
+    // counts are printed above, so nothing is lost by not returning `passed`.
+    failed
 }
