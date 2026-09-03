@@ -115,6 +115,18 @@ pub extern "C" fn test_main_entrance() -> size_t {
     }
 
     // rts tests
+    print!("test_global_ctor ... ");
+    match test_global_ctor() {
+        Ok(_) => {
+            println!("ok");
+            passed += 1;
+        }
+        Err(e) => {
+            println!("failed: {:?}", e);
+            failed += 1;
+        }
+    }
+
     print!("test_rsgx_get_thread_policy ... ");
     match test_rsgx_get_thread_policy() {
         Ok(_) => {
@@ -341,5 +353,7 @@ pub extern "C" fn test_main_entrance() -> size_t {
 
     println!("\ntest result: ok. {} passed; {} failed", passed, failed);
 
-    passed
+    // Return the number of failures so the caller can fail the process. Both
+    // counts are printed above, so nothing is lost by not returning `passed`.
+    failed
 }

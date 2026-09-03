@@ -29,6 +29,9 @@ pub fn test_cpuid_trap() -> TestResult {
     #[cfg(sgx_sim)]
     {
         // In simulation mode, CPUID should be patched to UD2 and handled by our trap handler
+        // `__cpuid` is unsafe up to 1.96 and safe from 1.97, so keep the block
+        // and allow it to be redundant.
+        #[allow(unused_unsafe)]
         unsafe {
             use core::arch::x86_64::__cpuid;
             __cpuid(0)

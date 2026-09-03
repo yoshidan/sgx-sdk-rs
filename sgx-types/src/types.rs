@@ -1105,8 +1105,11 @@ pub struct sgx_aex_mitigation_node_t {
     pub next: *mut sgx_aex_mitigation_node_t,
 }
 
+// sgx_trts_aex.h declares this as `void (*)(const sgx_exception_info_t *, const void *)`,
+// so it returns nothing. Declaring `-> c_void` is not a valid way to spell a C
+// `void` return.
 pub type sgx_aex_mitigation_fn_t =
-    extern "C" fn(info: *mut sgx_exception_info_t, args: *const c_void) -> c_void;
+    extern "C" fn(info: *mut sgx_exception_info_t, args: *const c_void);
 
 //
 // sgx_tseal.h

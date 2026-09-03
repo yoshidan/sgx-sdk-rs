@@ -17,8 +17,31 @@
 
 use crate::TestResult;
 
+use core::sync::atomic::{AtomicU32, Ordering};
 use sgx_trts::enclave::*;
 use sgx_trts::trts::*;
+use sgx_types::cfg_if;
+
+static CTOR_RUNS: AtomicU32 = AtomicU32::new(0);
+
+sgx_trts::global_ctors_object! {_TEST_CTOR, _test_ctor_func = {
+    CTOR_RUNS.fetch_add(1, Ordering::SeqCst);
+}}
+
+/// Regression test for `global_ctors_object!`.
+///
+/// The macro puts the function pointer in `.init_array`, which the enclave
+/// loader runs before the first ecall returns. Its expansion is
+/// target-dependent, so a wrong `cfg` makes it expand to a plain static with
+/// no section: everything still compiles and links, and the constructor is
+/// just never run. Assert here that it actually ran.
+pub fn test_global_ctor() -> TestResult {
+    match CTOR_RUNS.load(Ordering::SeqCst) {
+        1 => Ok(()),
+        0 => Err("global_ctors_object did not run: .init_array was not populated"),
+        _ => Err("global_ctors_object ran more than once"),
+    }
+}
 
 pub fn test_rsgx_get_thread_policy() -> TestResult {
     if rsgx_get_thread_policy() != SgxThreadPolicy::Bound {

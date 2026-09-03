@@ -1,8 +1,11 @@
 #![no_std]
 #![allow(internal_features)]
 #![feature(rustc_private)]
-#![feature(lang_items)]
-#![feature(alloc_error_handler)]
+// These are only used by the items below that are gated on the enclave target,
+// so declaring them unconditionally makes them unused when this crate is built
+// for the host.
+#![cfg_attr(target_env = "sgx", feature(lang_items))]
+#![cfg_attr(target_env = "sgx", feature(alloc_error_handler))]
 
 extern crate alloc;
 

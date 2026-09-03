@@ -174,19 +174,26 @@ fn main() {
         }
     };
 
-    let mut retval = 0usize;
+    let mut failed = 0usize;
 
-    let result = unsafe { test_main_entrance(enclave.geteid(), &mut retval) };
+    let result = unsafe { test_main_entrance(enclave.geteid(), &mut failed) };
 
     match result {
         sgx_status_t::SGX_SUCCESS => {}
         _ => {
-            println!("[-] ECALL Enclave Failed {}!", result.as_str());
-            return;
+            eprintln!("[-] ECALL Enclave Failed {}!", result.as_str());
+            enclave.destroy();
+            std::process::exit(1);
         }
     }
 
-    println!("[+] unit_test ended with {retval} tests passed!");
+    if failed != 0 {
+        eprintln!("[-] unit_test: {failed} test(s) failed!");
+        enclave.destroy();
+        std::process::exit(1);
+    }
+
+    println!("[+] unit_test: all tests passed!");
 
     // Verify trap counts if in simulation mode
     #[cfg(sgx_sim)]

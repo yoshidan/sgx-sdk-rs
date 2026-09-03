@@ -23,11 +23,16 @@
 /// of the generated enclave binary. On the first ecall of enclave's execution,
 /// SGX would execute these registered functions and thus initialize data
 /// structures.
+///
+/// `.init_array` is an ELF section, not a Linux-specific one. The enclave
+/// target `x86_64-unknown-unknown-sgx` reports `target_os = "none"`, so it
+/// must be handled here too; otherwise this macro expands to a static with
+/// no section and the constructor is silently never run.
 #[macro_export]
 macro_rules! global_ctors_object {
     ($var_name:ident, $func_name:ident = $func:block) => {
         cfg_if! {
-            if #[cfg(target_os = "linux")] {
+            if #[cfg(any(target_os = "linux", target_os = "none"))] {
                 #[link_section = ".init_array"]
                 #[no_mangle]
                 pub static $var_name: fn() = $func_name;
@@ -50,11 +55,14 @@ macro_rules! global_ctors_object {
     };
 }
 
+/// global_dtors_object registers functions to the `.fini_array` section.
+///
+/// See [`global_ctors_object`] for why `target_os = "none"` is handled.
 #[macro_export]
 macro_rules! global_dtors_object {
     ($var_name:ident, $func_name:ident = $func:block) => {
         cfg_if! {
-            if #[cfg(target_os = "linux")] {
+            if #[cfg(any(target_os = "linux", target_os = "none"))] {
                 #[link_section = ".fini_array"]
                 #[no_mangle]
                 pub static $var_name: fn() = $func_name;
