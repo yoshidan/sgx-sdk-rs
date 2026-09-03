@@ -1,4 +1,4 @@
-# sgx-sdk-rs
+# sgx-sdk-rs 
 
 Rust SDK for [Intel SGX (Software Guard Extensions)](https://github.com/intel/linux-sgx) - A collection of tools and libraries for building secure enclaves in Rust.
 
