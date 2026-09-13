@@ -41,7 +41,4 @@ tdx_attest           = []
 ttls                 = []
 utls                 = []
 
-[build-dependencies]
-sgx-build = { path = "../sgx-build" }
-
 [dependencies]
